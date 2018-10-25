@@ -1,20 +1,33 @@
 package main
 
-import "github.com/lifei6671/goapollo/goapollo"
+import (
+	"github.com/lifei6671/goapollo/cmd"
+	"gopkg.in/urfave/cli.v2"
+	"os"
+	"github.com/sirupsen/logrus"
+	"github.com/lifei6671/goapollo/log"
+)
 
-func main() {
+const APP_VERSION = "0.1"
 
-	config := func(client *goapollo.ApolloClient) {
-		client.Port = 8080
+//go run main.go run -app_id=6e77bd897fe903ac -ns=TEST1.nginx -server_url=http://dev.config.xin.com/
+
+func main()  {
+	logrus.SetFormatter(&logrus.TextFormatter{
+		TimestampFormat: "2006-01-02 15:04:05",
+		ForceColors:      true,
+		QuoteEmptyFields: true,
+		FullTimestamp:    true,
+	})
+	logrus.AddHook(&log.ContextHook{})
+	//logrus.SetLevel(logrus.Level(5))
+
+	app := &cli.App{}
+	app.Name = "Apollo client"
+	app.Usage = "A Apollo client"
+	app.Version = APP_VERSION
+	app.Commands = []*cli.Command{
+		cmd.Start,
 	}
-
-	apolloConfig := func(client *goapollo.ApolloClient) {
-		config := goapollo.NewApolloConfig("http://dev.config.xin.com/", "6e77bd897fe903ac")
-		config.NamespaceName = "TEST1.nginx"
-
-		client.AddApolloConfig(config)
-	}
-
-	client := goapollo.NewApolloClient(config, apolloConfig)
-	client.Run()
+	app.Run(os.Args)
 }

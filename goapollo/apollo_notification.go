@@ -4,25 +4,33 @@ import (
 	"sync"
 	"fmt"
 )
+const (
+	defaultNotificationId = -1
+)
+
+
+type apolloNotify struct {
+	NotificationId int64  `json:"notificationId"`
+	NamespaceName  string `json:"namespaceName"`
+}
 
 // Apollo 通知信息
 type ApolloConfigNotification struct {
 	NamespaceName  string
 	NotificationId int64
-	Messages       *ApolloNotificationMessages
 }
 
 func NewApolloConfigNotification() *ApolloConfigNotification {
-	return &ApolloConfigNotification{}
+	return &ApolloConfigNotification{NotificationId: defaultNotificationId}
 }
 
 // 添加通知.
-func (notify *ApolloConfigNotification) AddMessage(key string, notificationId int64) {
-	if notify.Messages == nil {
-		notify.Messages = NewApolloNotificationMessages()
-	}
-	notify.Messages.Put(key, notificationId)
-}
+//func (notify *ApolloConfigNotification) AddMessage(key string, notificationId int64) {
+//	if notify.Messages == nil {
+//		notify.Messages = NewApolloNotificationMessages()
+//	}
+//	notify.Messages.Put(key, notificationId)
+//}
 
 func (notify *ApolloConfigNotification) String() string {
 	return fmt.Sprintf("ApolloConfigNotification{ namespaceName='%s', notificationId=%d }", notify.NamespaceName, notify.NotificationId);

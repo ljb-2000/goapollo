@@ -2,12 +2,12 @@ package goapollo
 
 import (
 	"sync"
-	log "github.com/cihub/seelog"
+	log "github.com/sirupsen/logrus"
 	"fmt"
 )
 
 type ApolloClient struct {
-	mux    *sync.RWMutex
+	mux *sync.RWMutex
 	// Apollo 配置集合
 	configurations map[string]*ApolloConfig
 	//监听的 HTTP 请求端口
@@ -17,10 +17,10 @@ type ApolloClient struct {
 }
 
 func NewApolloClient(options ...func(client *ApolloClient)) *ApolloClient {
-	client := &ApolloClient{mux: &sync.RWMutex{}, configurations:make(map[string]*ApolloConfig)}
+	client := &ApolloClient{mux: &sync.RWMutex{}, configurations: make(map[string]*ApolloConfig)}
 
 	if len(options) > 0 {
-		for _,option := range options {
+		for _, option := range options {
 			option(client)
 		}
 	}
@@ -40,9 +40,15 @@ func (c *ApolloClient) Run() {
 					}
 				}()
 
-				if err := config.Start(); err != nil {
-					log.Errorf("panic serving : %s %v", config.String(), err)
-					endRunning <- true
+				//if err := config.Start(); err != nil {
+				//	log.Errorf("panic serving : %s %v", config.String(), err)
+				//	endRunning <- true
+				//}
+
+				channel := config.ListenRemoteConfigLongPollNotificationServiceAsync()
+				for {
+					entry := <-channel
+					log.Info(entry)
 				}
 			}(item)
 		}
@@ -51,10 +57,14 @@ func (c *ApolloClient) Run() {
 	<-endRunning
 }
 
-func (c *ApolloClient) AddApolloConfig(config *ApolloConfig) {
-	c.mux.Lock()
-	defer c.mux.Unlock()
+func (c *ApolloClient) AddApolloConfig(configs ...*ApolloConfig) {
+	if len(configs) > 0{
+		c.mux.Lock()
+		defer c.mux.Unlock()
+		for _,config := range configs {
+			key := fmt.Sprintf("%s.%s.%s", config.AppId, config.ClusterName, config.NamespaceName)
+			c.configurations[key] = config
+		}
+	}
 
-	key := fmt.Sprintf("%s.%s.%s", config.AppId, config.ClusterName, config.NamespaceName)
-	c.configurations[key] = config
 }
