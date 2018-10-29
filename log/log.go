@@ -17,12 +17,11 @@ func getHandler(logPath string, level log.Level) (*os.File, error) {
 	logLock.Lock()
 	defer logLock.Unlock()
 	//初始化当前，后天的文件句柄
-	year     := time.Now().Year()
-	month    := time.Now().Month()
+	ym := time.Now().Local().Format("2006-01")
 	t        := time.Now()
 	day      := fmt.Sprintf("%d-%02d-%02d", t.Year(), t.Month(), t.Day())
-	dir      := fmt.Sprintf("%s/%d/%s", logPath, year, month)
-	dfile    := fmt.Sprintf("%s/%d/%s/%s-%s.log", logPath, year, month, level.String(), day)
+	dir      := fmt.Sprintf("%s/%s", logPath, ym)
+	dfile    := fmt.Sprintf("%s/%s/%s-%s.log", logPath, ym, level.String(), day)
 	//logsDir := &file.WPath{Dir:dir}
 	if _,err := os.Stat(dir); err != nil && os.IsNotExist(err) {
 		os.MkdirAll(dir, 0755)

@@ -57,7 +57,7 @@ func NewApolloConfig(url, appId string) *ApolloConfig {
 		AppId: appId,
 		ClusterName: "default",
 		NamespaceName: "application",
-		FullPullFromCacheInterval: time.Minute * 1,
+		FullPullFromCacheInterval: time.Second * 60,
 		LongPollInterval: time.Second * 30,
 		notificationId: defaultNotificationId,
 		mux: &sync.RWMutex{},
@@ -67,19 +67,9 @@ func NewApolloConfig(url, appId string) *ApolloConfig {
 	return config
 }
 
-// 启动监听.
-func (c *ApolloConfig) Start() error {
-	item, err := c.GetApolloRemoteConfigFromCache()
-
-	if err != nil {
-		return err
-	}
-	log.Infof("%v", item)
-	return nil
-}
 
 // 启动全量定时拉取任务.
-func (c *ApolloConfig) StartFullFromCacheFetchTaskWithInterval(interval time.Duration, pairChannel chan<- KeyValuePair) {
+func (c *ApolloConfig) StartFullFromCacheFetchTaskWithInterval(interval time.Duration, pairChannel chan <- KeyValuePair) {
 
 	t := time.NewTimer(interval)
 
@@ -128,17 +118,17 @@ func (c *ApolloConfig) StartFullFromDbFetchTaskWithInterval(interval time.Durati
 // 从远程服务器提供的接口获取配置信息.
 func (c *ApolloConfig) GetApolloRemoteConfigFromCache() (KeyValuePair, error) {
 	client := &http.Client{}
-	url := c.getApolloRemoteConfigFromCacheUrl()
-	req, err := http.NewRequest("GET", url, nil)
+	serverUrl := c.getApolloRemoteConfigFromCacheUrl()
+	req, err := http.NewRequest("GET", serverUrl, nil)
 
 	if err != nil {
-		log.Errorf("request error:%s %s", url, err)
+		log.Errorf("request error:%s %s", serverUrl, err)
 		return nil, err
 	}
 	resp, err := client.Do(req)
 
 	if err != nil {
-		log.Errorf("response error:%s %s", url, err)
+		log.Errorf("response error:%s %s", serverUrl, err)
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -148,19 +138,19 @@ func (c *ApolloConfig) GetApolloRemoteConfigFromCache() (KeyValuePair, error) {
 	}
 
 	if resp.StatusCode != 200 {
-		return nil, errors.New(fmt.Sprintf("remote server response status code error: %s %d", url, resp.StatusCode))
+		return nil, errors.New(fmt.Sprintf("remote server response status code error: %s %d", serverUrl, resp.StatusCode))
 	}
 	body, err := ioutil.ReadAll(resp.Body)
 
 	if err != nil {
-		log.Errorf("read response body error:%s %s", url, err)
+		log.Errorf("read response body error:%s %s", serverUrl, err)
 		return nil, err
 	}
 
 	kv := make(map[string]string, 0)
 	err = json.Unmarshal(body, &kv)
 	if err != nil {
-		log.Errorf("Unmarshal json result error:%s %s %s", url, string(body), err)
+		log.Errorf("Unmarshal json result error:%s %s %s", serverUrl, string(body), err)
 	}
 	return kv, err
 }
@@ -223,7 +213,7 @@ func (c *ApolloConfig) ListenRemoteConfigLongPollNotificationServiceAsync() (<-c
 		c.mux.Unlock()
 	}
 
-	log.Info("Start async notification.")
+	log.Info("Start async notification listen.")
 	go func() {
 		t := time.NewTimer(c.LongPollInterval)
 
@@ -242,7 +232,7 @@ func (c *ApolloConfig) ListenRemoteConfigLongPollNotificationServiceAsync() (<-c
 								if err == nil && len(kv) > 0 {
 									channel <- c.updateConfigurationCache(kv)
 								}
-								break;
+								break
 							}
 						}
 					}
@@ -417,5 +407,5 @@ func (c *ApolloConfig) String() string {
 		c.ClusterName,
 		c.NamespaceName,
 		c.Configurations,
-		c.ReleaseKey);
+		c.ReleaseKey)
 }

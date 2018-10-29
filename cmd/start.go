@@ -6,6 +6,8 @@ import (
 	"github.com/lifei6671/goapollo/goapollo"
 	"os"
 	log "github.com/sirupsen/logrus"
+	"github.com/lifei6671/goini"
+	"strings"
 )
 
 var Start = &cli.Command{
@@ -28,11 +30,24 @@ var Start = &cli.Command{
 			Usage:   "Save config to file path.",
 			EnvVars: []string{"APOLLO_SAVE_PATH"},
 		},
+		&cli.IntFlag{
+			Name:    "port",
+			Aliases: []string{"p"},
+			Value:   8088,
+			Usage:   "Http listen port.",
+			EnvVars: []string{"APOLLO_HTTP_PORT"},
+		},
+		&cli.StringFlag{
+			Name:    "addr",
+			Value:   "",
+			Usage:   "Http listen addr",
+			EnvVars: []string{"APOLLO_HTTP_ADDR"},
+		},
 		&cli.StringFlag{
 			Name:    "logger",
 			Aliases: []string{"log"},
 			Value:   "conf/seelog.xml",
-			Usage:   "Seelog configuration file path.",
+			Usage:   "logrus configuration file path.",
 			EnvVars: []string{"APOLLO_LOGGER"},
 		},
 		&cli.StringFlag{
@@ -70,6 +85,7 @@ var Start = &cli.Command{
 		},
 	},
 }
+
 /**
 {
   "appId": "6e77bd897fe903ac",
@@ -86,15 +102,63 @@ func runStart(c *cli.Context) error {
 	configFile := c.String("config")
 
 	configs := make([]*goapollo.ApolloConfig, 0)
+	port := c.Int("port")
+	addr := c.String("addr")
 
 	//如果配置文件存在则初始化配置文件,如果没有指定配置文件或配置文件不存在则从其他参数中获取
 	if _, err := os.Stat(configFile); err == nil {
+		ini, err := goini.LoadFromFile(configFile);
+		if err != nil {
+			log.Fatalf("配置文件解析失败 -> %s %s", configFile, err)
+		}
+		port = ini.DefaultInt("port", port)
+		addr = ini.DefaultString("addr", "")
 
+		ini.ForEach(func(section string) bool {
+			log.Info(section)
+			if section != goini.DefaultSection && strings.HasPrefix(section, "app:") {
+				appId := ini.GetString(section + "::appId")
+				if appId == "" {
+					log.Fatalf("Apollo aplication id not does empty -> [Section] %s", section)
+					return true
+				}
+				url := ini.GetString(section + "::serverUrl")
+				if url == "" {
+					log.Fatalf("Apollo server url not does empty -> [Section] %s", section)
+					return true
+				}
+				if !strings.HasSuffix(url, "/") {
+					url += "/"
+				}
+				cluster := ini.DefaultString(section+"::cluster", "default")
+				namespace := ini.DefaultString(section+"::namespace", "application")
+				saveFile := ini.DefaultString(section+"::saveFile", "")
+
+				config := goapollo.NewApolloConfig(url, appId)
+				config.LocalFilePath = saveFile
+				config.NamespaceName = namespace
+				config.ClusterName = cluster
+				config.AppId = appId
+				config.ConfigServerUrl = url
+				//轮询拉取时间间隔.
+				if longPollInterval := c.Int("longPollInterval"); longPollInterval > 0 {
+					config.LongPollInterval = time.Second * time.Duration(longPollInterval)
+				}
+				//全量拉取时间间隔
+				if fullPullInterval := c.Int("fullPullFromCacheInterval"); fullPullInterval > 0 {
+					config.FullPullFromCacheInterval = time.Second * time.Duration(fullPullInterval)
+				}
+
+				log.Infof("Add configuration application -> %s", config.String())
+				configs = append(configs, config)
+			}
+			return true
+		})
 	} else if appId := c.String("app_id"); appId != "" {
 		//从命令行中获取参数
 		url := c.String("server_url")
 		if url == "" {
-			log.Error("Apollo ip address not does empty.")
+			log.Error("Apollo server url not does empty.")
 			os.Exit(1)
 		}
 
@@ -109,17 +173,14 @@ func runStart(c *cli.Context) error {
 		configs = append(configs, config)
 
 	} else {
-		log.Error("Not found configuration file.")
-		os.Exit(1)
+		log.Fatal("Not found configuration file.")
 	}
-
-	//初始化日志
-	//logConfigPath := c.String("logger")
 
 	log.Info("开始监听配置变更.")
 
 	config := func(client *goapollo.ApolloClient) {
-		client.Port = 8080
+		client.Port = port
+		client.Addr = addr
 	}
 
 	apolloConfig := func(client *goapollo.ApolloClient) {

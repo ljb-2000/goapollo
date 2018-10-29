@@ -19,7 +19,7 @@ func main()  {
 		QuoteEmptyFields: true,
 		FullTimestamp:    true,
 	})
-	logrus.AddHook(&log.ContextHook{})
+	logrus.AddHook(&log.ContextHook{ LogPath: "./runtime/logs/"})
 	//logrus.SetLevel(logrus.Level(5))
 
 	app := &cli.App{}
