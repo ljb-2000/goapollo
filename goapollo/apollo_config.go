@@ -36,6 +36,8 @@ type ApolloConfig struct {
 	IpAddress string `json:"ip"`
 
 	Configurations map[string]string `json:"configurations"`
+	//如果不是 properties 结构，则会储存在该字段内。
+	ConfigFileContent string `json:"-"`
 
 	ReleaseKey string `json:"releaseKey"`
 	// 从缓存中全量拉取轮询的时间间隔.
@@ -200,6 +202,8 @@ func (c *ApolloConfig) GetApolloRemoteConfigFromDb() (KeyValuePair, error) {
 	return nil, err
 }
 
+
+
 //监听 Apollo 的通知消息.
 func (c *ApolloConfig) ListenRemoteConfigLongPollNotificationServiceAsync() (<-chan *ConfigChangeEventArgs) {
 
@@ -344,7 +348,7 @@ func (c *ApolloConfig) updateConfigurationCache(kv KeyValuePair) (*ConfigChangeE
 	c.mux.Lock()
 	defer c.mux.Unlock()
 
-	args := &ConfigChangeEventArgs{NamespaceName: c.NamespaceName, Values: make(map[string]*ConfigChangeEntry)}
+	args := NewConfigChangeEventArgs(c.NamespaceName, C_TYPE_POROPERTIES)
 
 	if len(kv) <= 0 {
 		return args

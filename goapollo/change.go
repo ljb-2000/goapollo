@@ -9,9 +9,37 @@ const (
 	C_DELETED
 )
 
+const (
+	C_TYPE_POROPERTIES ConfigType = iota
+	C_TYPE_XML
+	C_TYPE_YAML
+	C_TYPE_YML
+	C_TYPE_JSON
+)
+
+//配置类型.
+type ConfigType int
+
+//配置变更类型
 type PropertyChangeType int
 
 type KeyValuePair map[string]string
+
+type ConfigArgs struct {
+	NamespaceName string
+	ConfigType    ConfigType
+}
+
+//文件类型变动参数.
+type ConfigFileChangeEventArgs struct {
+	ConfigArgs
+	FileContent string
+}
+
+func NewConfigFileChangeEventArgs (namespace string, configType ConfigType) *ConfigFileChangeEventArgs {
+
+	return &ConfigFileChangeEventArgs{ ConfigArgs{ NamespaceName:namespace, ConfigType:configType}, ""}
+}
 
 // 配置变化的实体.
 type ConfigChangeEntry struct {
@@ -31,14 +59,19 @@ func (e *ConfigChangeEntry) String() string {
 		e.ChangeType, )
 }
 
-//
+//键值类型结构.
 type ConfigChangeEventArgs struct {
-	NamespaceName string
-	Values        map[string]*ConfigChangeEntry
+	ConfigArgs
+	Values map[string]*ConfigChangeEntry
 }
 
-func (args *ConfigChangeEventArgs) String() string {
+func NewConfigChangeEventArgs(namespace string, configType ConfigType) *ConfigChangeEventArgs {
+
+	return &ConfigChangeEventArgs{ ConfigArgs{ NamespaceName:namespace, ConfigType:configType}, make(map[string]*ConfigChangeEntry) }
+}
+
+func (c *ConfigChangeEventArgs) String() string {
 	return fmt.Sprintf("ConfigChangeEventArgs(NamespaceName:%s,Values:%v)",
-		args.NamespaceName,
-		args.Values, )
+		c.NamespaceName,
+		c.Values, )
 }
