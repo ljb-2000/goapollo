@@ -1,7 +1,6 @@
 package goapollo
 
 import (
-	"path/filepath"
 	log "github.com/sirupsen/logrus"
 	"github.com/lifei6671/goini"
 	"strings"
@@ -13,27 +12,20 @@ type IniHandler struct {
 }
 
 func NewIniHandler(savePath string) (*IniHandler, error) {
-	p, err := filepath.Abs(savePath)
-
-	if err != nil {
-		log.Error("解析配置文件路径失败 -> ", savePath, err)
-		return nil, err
-	}
 
 	h := &IniHandler{
-		savePath: p,
+		savePath: savePath,
 	}
 
-	err = h.Open(h.savePath)
+	err := h.Open(h.savePath)
 
 	return h, err
 }
 
-func (h *IniHandler) Handler(changeEvent *ConfigChangeEventArgs) (error) {
-	if len(changeEvent.Values) > 0 {
+func (h *IniHandler) Handler(changeEvent *ConfigEntity) (error) {
+	if changeEvent.ConfigType == C_TYPE_POROPERTIES {
 
-		for k, v := range changeEvent.Values {
-			log.Infof("Ini 变更信息 -> Key=%s NewValue=%s $ OldValue=%s $ ChangeType=%d", k, v.NewValue, v.OldValue, v.ChangeType)
+		for k, v := range changeEvent.GetValues() {
 			var keys []string
 			key := strings.TrimSpace(k)
 			if strings.Index(key, ".") > 0 {
@@ -42,13 +34,7 @@ func (h *IniHandler) Handler(changeEvent *ConfigChangeEventArgs) (error) {
 			} else {
 				keys = []string{"", key}
 			}
-
-			if v.ChangeType == C_ADDED || v.ChangeType == C_MODIFIED {
-				h.body.AddEntry(keys[0], keys[1], v.NewValue)
-
-			} else if v.ChangeType == C_DELETED {
-				h.body.DeleteKey(keys[0], keys[1])
-			}
+			h.body.AddEntry(keys[0], keys[1], v)
 		}
 		err := h.body.SaveFile(h.savePath)
 
@@ -63,13 +49,7 @@ func (h *IniHandler) Handler(changeEvent *ConfigChangeEventArgs) (error) {
 //打开配置文件并解析.
 func (h *IniHandler) Open(path string) error {
 
-	ini, err := goini.LoadFromFile(h.savePath)
-
-	if err != nil {
-		log.Errorf("初始化 ini 配置失败 -> %s %s", h.savePath, err)
-		ini = goini.NewConfig()
-	}
-	h.body = ini
+	h.body = goini.NewConfig()
 
 	return nil
 }

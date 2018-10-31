@@ -25,20 +25,34 @@ type PropertyChangeType int
 
 type KeyValuePair map[string]string
 
-type ConfigArgs struct {
+//配置实体.
+type ConfigEntity struct {
 	NamespaceName string
 	ConfigType    ConfigType
+	Values interface{}
 }
 
-//文件类型变动参数.
-type ConfigFileChangeEventArgs struct {
-	ConfigArgs
-	FileContent string
+func NewConfigEntity() *ConfigEntity  {
+	return &ConfigEntity{}
+}
+func (c *ConfigEntity) GetValues() (map[string]string) {
+	if c.ConfigType != C_TYPE_POROPERTIES {
+		return nil
+	}
+	if kv,ok := c.Values.(map[string]string); ok {
+		return kv
+	}
+	return nil
 }
 
-func NewConfigFileChangeEventArgs (namespace string, configType ConfigType) *ConfigFileChangeEventArgs {
-
-	return &ConfigFileChangeEventArgs{ ConfigArgs{ NamespaceName:namespace, ConfigType:configType}, ""}
+func (c *ConfigEntity) GetConfigFile() string  {
+	if c.ConfigType == C_TYPE_POROPERTIES {
+		return ""
+	}
+	if kv,ok := c.Values.(string); ok {
+		return kv
+	}
+	return ""
 }
 
 // 配置变化的实体.
@@ -61,13 +75,14 @@ func (e *ConfigChangeEntry) String() string {
 
 //键值类型结构.
 type ConfigChangeEventArgs struct {
-	ConfigArgs
+	NamespaceName string
+	ConfigType    ConfigType
 	Values map[string]*ConfigChangeEntry
+	FileContent string
 }
 
 func NewConfigChangeEventArgs(namespace string, configType ConfigType) *ConfigChangeEventArgs {
-
-	return &ConfigChangeEventArgs{ ConfigArgs{ NamespaceName:namespace, ConfigType:configType}, make(map[string]*ConfigChangeEntry) }
+	return &ConfigChangeEventArgs{  NamespaceName:namespace, ConfigType:configType,Values: make(map[string]*ConfigChangeEntry) ,FileContent:""}
 }
 
 func (c *ConfigChangeEventArgs) String() string {

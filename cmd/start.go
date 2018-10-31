@@ -8,6 +8,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/lifei6671/goini"
 	"strings"
+	"path/filepath"
 )
 
 var Start = &cli.Command{
@@ -134,6 +135,14 @@ func runStart(c *cli.Context) error {
 				namespace := ini.DefaultString(section+"::namespace", "application")
 				saveFile := ini.DefaultString(section+"::saveFile", "")
 
+				if sf,err := filepath.Abs(saveFile); err == nil {
+					dir := filepath.Dir(sf)
+
+					if _, err := os.Stat(dir); err != nil && os.IsNotExist(err) {
+						os.MkdirAll(dir, 0755)
+					}
+					saveFile = sf
+				}
 				config := goapollo.NewApolloConfig(url, appId)
 				config.LocalFilePath = saveFile
 				config.NamespaceName = namespace

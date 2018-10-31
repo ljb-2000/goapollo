@@ -37,6 +37,29 @@ func (c *ApolloClient) Run() {
 
 	if len(c.configurations) > 0 {
 		for _, item := range c.configurations {
+
+			if item.FullPullFromCacheInterval > 0 {
+				//当启用了全量拉取，则启动一个goroutine来执行任务
+				go func(config *ApolloConfig) {
+					defer func() {
+						if err := recover(); err != nil {
+							log.Errorf("panic serving : %s %v", config.String(), err)
+						}
+					}()
+					channel := config.StartFullFromCacheFetchTaskWithIntervalAsync(item.FullPullFromCacheInterval)
+
+					for {
+						entity := <- channel
+
+						log.Infof("全量拉取 -> %v",entity)
+						//如果设置了配置文件则保存配置
+						if config.LocalFilePath != "" {
+							ExecuteHandler(entity, config.LocalFilePath)
+						}
+					}
+				}(item)
+			}
+
 			go func(config *ApolloConfig) {
 				defer func() {
 					if err := recover(); err != nil {
@@ -44,20 +67,14 @@ func (c *ApolloClient) Run() {
 					}
 				}()
 
-				//if err := config.Start(); err != nil {
-				//	log.Errorf("panic serving : %s %v", config.String(), err)
-				//	endRunning <- true
-				//}
-				if config.FullPullFromCacheInterval > 0 {
-					if err := config.Start(); err != nil {
-
-					}
-				}
-
 				channel := config.ListenRemoteConfigLongPollNotificationServiceAsync()
 				for {
-					entry := <-channel
-					log.Info(entry)
+					entity := <-channel
+					log.Info("变更事件触发 ->%v" ,entity)
+					//如果设置了配置文件则保存配置
+					if config.LocalFilePath != "" {
+						ExecuteHandler(entity, config.LocalFilePath)
+					}
 				}
 			}(item)
 		}

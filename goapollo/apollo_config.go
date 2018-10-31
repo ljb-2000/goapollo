@@ -69,33 +69,36 @@ func NewApolloConfig(url, appId string) *ApolloConfig {
 	return config
 }
 
-
 // 启动全量定时拉取任务.
-func (c *ApolloConfig) StartFullFromCacheFetchTaskWithInterval(interval time.Duration, pairChannel chan <- KeyValuePair) {
+func (c *ApolloConfig) StartFullFromCacheFetchTaskWithIntervalAsync(interval time.Duration) (<-chan *ConfigEntity) {
 
-	t := time.NewTimer(interval)
+	pairChannel := make(chan *ConfigEntity, 1)
+	go func() {
+		t := time.NewTimer(interval)
 
-	for {
-		select {
-		case <-t.C:
-			pair, err := c.GetApolloRemoteConfigFromCache()
-			if err != nil {
-				if err == ErrConfigUnmodified {
-					log.Info(err.Error())
+		for {
+			select {
+			case <-t.C:
+				pair, err := c.GetApolloRemoteConfigFromCache()
+				if err != nil {
+					if err == ErrConfigUnmodified {
+						log.Info(err.Error())
+					} else {
+						log.Errorf("get apollo remote config fail:%s", err)
+					}
 				} else {
-					log.Errorf("get apollo remote config fail:%s", err)
+					log.Info("From Apollo cache fetch config success. ")
+					pairChannel <- pair
 				}
-			} else {
-				log.Info("From Apollo cache fetch config success. ")
-				pairChannel <- pair
+				t.Reset(interval)
 			}
-			t.Reset(interval)
 		}
-	}
+	}()
+	return pairChannel
 }
 
 // 定时全量从Apollo数据库拉取配置信息.
-func (c *ApolloConfig) StartFullFromDbFetchTaskWithInterval(interval time.Duration, pairChannel chan<- KeyValuePair) {
+func (c *ApolloConfig) StartFullFromDbFetchTaskWithInterval(interval time.Duration, pairChannel chan<- *ConfigEntity) {
 	t := time.NewTimer(interval)
 
 	for {
@@ -118,7 +121,7 @@ func (c *ApolloConfig) StartFullFromDbFetchTaskWithInterval(interval time.Durati
 }
 
 // 从远程服务器提供的接口获取配置信息.
-func (c *ApolloConfig) GetApolloRemoteConfigFromCache() (KeyValuePair, error) {
+func (c *ApolloConfig) GetApolloRemoteConfigFromCache() (*ConfigEntity, error) {
 	client := &http.Client{}
 	serverUrl := c.getApolloRemoteConfigFromCacheUrl()
 	req, err := http.NewRequest("GET", serverUrl, nil)
@@ -148,17 +151,27 @@ func (c *ApolloConfig) GetApolloRemoteConfigFromCache() (KeyValuePair, error) {
 		log.Errorf("read response body error:%s %s", serverUrl, err)
 		return nil, err
 	}
+	entity := NewConfigEntity()
+	entity.NamespaceName = c.NamespaceName
+	entity.ConfigType = GetConfigType(c.NamespaceName)
 
 	kv := make(map[string]string, 0)
 	err = json.Unmarshal(body, &kv)
 	if err != nil {
 		log.Errorf("Unmarshal json result error:%s %s %s", serverUrl, string(body), err)
+	} else {
+		if entity.ConfigType == C_TYPE_POROPERTIES {
+			entity.Values = kv
+		} else if b, ok := kv["content"]; ok {
+			entity.Values = b
+		}
 	}
-	return kv, err
+
+	return entity, err
 }
 
 //通过不带缓存的Http接口从Apollo读取配置.
-func (c *ApolloConfig) GetApolloRemoteConfigFromDb() (KeyValuePair, error) {
+func (c *ApolloConfig) GetApolloRemoteConfigFromDb() (*ConfigEntity, error) {
 	client := &http.Client{}
 	uri := c.getApolloRemoteConfigFromDbUrl()
 	req, err := http.NewRequest("GET", uri, nil)
@@ -180,14 +193,18 @@ func (c *ApolloConfig) GetApolloRemoteConfigFromDb() (KeyValuePair, error) {
 		return nil, ErrConfigUnmodified
 	}
 	if resp.StatusCode != 200 {
-		return nil, errors.New(fmt.Sprintf("remote server response status code error: %s %d", uri, resp.StatusCode))
+		return nil, errors.New(fmt.Sprintf("Remote server response status code error: %s %d", uri, resp.StatusCode))
 	}
 	body, err := ioutil.ReadAll(resp.Body)
 
 	if err != nil {
-		log.Errorf("read response body error:%s %s", uri, err)
+		log.Errorf("Read response body error:%s %s", uri, err)
 		return nil, err
 	}
+	log.Infof("Remote response body -> %s", string(body))
+	entity := NewConfigEntity()
+	entity.NamespaceName = c.NamespaceName
+	entity.ConfigType = GetConfigType(c.NamespaceName)
 
 	config := ApolloConfig{}
 
@@ -197,24 +214,33 @@ func (c *ApolloConfig) GetApolloRemoteConfigFromDb() (KeyValuePair, error) {
 		log.Errorf("Unmarshal json result error:%s %s %s", uri, string(body), err)
 	} else {
 		c.ReleaseKey = config.ReleaseKey
-		return config.Configurations, nil
+		if entity.ConfigType == C_TYPE_POROPERTIES {
+			entity.Values = config.Configurations
+		} else if b, ok := config.Configurations["content"]; ok {
+			entity.Values = b
+		}
 	}
-	return nil, err
+
+	return entity, err
 }
 
-
-
 //监听 Apollo 的通知消息.
-func (c *ApolloConfig) ListenRemoteConfigLongPollNotificationServiceAsync() (<-chan *ConfigChangeEventArgs) {
+func (c *ApolloConfig) ListenRemoteConfigLongPollNotificationServiceAsync() (<-chan *ConfigEntity) {
 
-	channel := make(chan *ConfigChangeEventArgs, 1)
+	channel := make(chan *ConfigEntity, 1)
 
-	if kv, err := c.GetApolloRemoteConfigFromDb(); err == nil {
-		c.mux.Lock()
-		for k, v := range kv {
-			c.Configurations[k] = v
+	if entity, err := c.GetApolloRemoteConfigFromDb(); err == nil {
+		//如果是键值则添加到缓存中，否则直接复制给属性
+		if kv, ok := entity.Values.(map[string]string); ok && entity.ConfigType == C_TYPE_POROPERTIES {
+			c.mux.Lock()
+			for k, v := range kv {
+				c.Configurations[k] = v
+			}
+			c.mux.Unlock()
+		} else {
+			c.ConfigFileContent = entity.GetConfigFile()
 		}
-		c.mux.Unlock()
+		channel <- entity
 	}
 
 	log.Info("Start async notification listen.")
@@ -233,8 +259,9 @@ func (c *ApolloConfig) ListenRemoteConfigLongPollNotificationServiceAsync() (<-c
 								c.notificationId = config.NotificationId
 								log.Infof("Apollo notification event: %s - %d", config.NamespaceName, config.NotificationId)
 								kv, err := c.GetApolloRemoteConfigFromDb()
-								if err == nil && len(kv) > 0 {
-									channel <- c.updateConfigurationCache(kv)
+								if err == nil {
+									c.updateConfigurationCache(kv)
+									channel <- kv
 								}
 								break
 							}
@@ -343,65 +370,71 @@ func (c *ApolloConfig) getApolloRemoteNotificationUrl() string {
 }
 
 //更新配置.
-func (c *ApolloConfig) updateConfigurationCache(kv KeyValuePair) (*ConfigChangeEventArgs) {
+func (c *ApolloConfig) updateConfigurationCache(entity *ConfigEntity) {
 
 	c.mux.Lock()
 	defer c.mux.Unlock()
 
-	args := NewConfigChangeEventArgs(c.NamespaceName, C_TYPE_POROPERTIES)
+	args := NewConfigChangeEventArgs(c.NamespaceName, entity.ConfigType)
 
-	if len(kv) <= 0 {
-		return args
-	}
-	tempMap := make(map[string]string)
+	if kv, ok := entity.Values.(map[string]string); ok {
 
-	for k, v := range c.Configurations {
-		tempMap[k] = v
-	}
+		if len(kv) <= 0 {
+			return
+		}
 
-	for k, v := range kv {
-		//与已存在的配置信息作比较
-		if vv, ok := c.Configurations[k]; ok {
-			delete(tempMap, k)
+		tempMap := make(map[string]string)
 
-			entry := &ConfigChangeEntry{
-				NamespaceName: c.NamespaceName,
-				PropertyName:  k,
-				OldValue:      vv,
-				NewValue:      v,
-			}
-			//如果值不相等，则是修改了值
-			if vv != v {
-				entry.ChangeType = C_MODIFIED
-				c.Configurations[k] = v
+		for k, v := range c.Configurations {
+			tempMap[k] = v
+		}
+
+		for k, v := range kv {
+			//与已存在的配置信息作比较
+			if vv, ok := c.Configurations[k]; ok {
+				delete(tempMap, k)
+
+				entry := &ConfigChangeEntry{
+					NamespaceName: c.NamespaceName,
+					PropertyName:  k,
+					OldValue:      vv,
+					NewValue:      v,
+				}
+				//如果值不相等，则是修改了值
+				if vv != v {
+					entry.ChangeType = C_MODIFIED
+					c.Configurations[k] = v
+				} else {
+					entry.ChangeType = C_UNCHANGED
+				}
+				args.Values[k] = entry
 			} else {
-				entry.ChangeType = C_UNCHANGED
+				entry := &ConfigChangeEntry{
+					NamespaceName: c.NamespaceName,
+					PropertyName:  k,
+					OldValue:      vv,
+					NewValue:      v,
+					ChangeType:    C_ADDED,
+				}
+				args.Values[k] = entry
+				c.Configurations[k] = v
 			}
-			args.Values[k] = entry
-		} else {
+		}
+		//删除的项
+		for k, v := range tempMap {
 			entry := &ConfigChangeEntry{
 				NamespaceName: c.NamespaceName,
 				PropertyName:  k,
-				OldValue:      vv,
-				NewValue:      v,
-				ChangeType:    C_ADDED,
+				OldValue:      v,
+				NewValue:      "",
+				ChangeType:    C_DELETED,
 			}
 			args.Values[k] = entry
-			c.Configurations[k] = v
 		}
+	} else {
+		args.FileContent = entity.Values.(string)
 	}
-	//删除的项
-	for k, v := range tempMap {
-		entry := &ConfigChangeEntry{
-			NamespaceName: c.NamespaceName,
-			PropertyName:  k,
-			OldValue:      v,
-			NewValue:      "",
-			ChangeType:    C_DELETED,
-		}
-		args.Values[k] = entry
-	}
-	return args
+
 }
 
 // 获取 String.
