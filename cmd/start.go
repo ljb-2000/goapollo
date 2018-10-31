@@ -60,7 +60,6 @@ var Start = &cli.Command{
 		},
 		&cli.StringFlag{
 			Name:    "cluster",
-			Aliases: []string{"cus"},
 			Value:   "default",
 			Usage:   "Apollo cluster name.",
 			EnvVars: []string{"APOLLO_CLUSTER"},
@@ -78,11 +77,16 @@ var Start = &cli.Command{
 			EnvVars: []string{"APOLLO_SERVER_URL"},
 		},
 		&cli.DurationFlag{
-			Name:    "interval",
-			Aliases: []string{"i"},
-			Value:   time.Minute * 1,
+			Name:    "long_interval",
+			Value:   time.Second * 60,
 			Usage:   "Timed full pull time interval. ",
-			EnvVars: []string{"APOLLO_INTERVAL"},
+			EnvVars: []string{"APOLLO_LONG_INTERVAL"},
+		},
+		&cli.DurationFlag{
+			Name: "full_interval",
+			Value: time.Second * 60,
+			Usage:"",
+			EnvVars:[]string{"APOLLO_FULL_INTERVAL"},
 		},
 	},
 }
@@ -150,11 +154,11 @@ func runStart(c *cli.Context) error {
 				config.AppId = appId
 				config.ConfigServerUrl = url
 				//轮询拉取时间间隔.
-				if longPollInterval := c.Int("longPollInterval"); longPollInterval > 0 {
+				if longPollInterval,err := ini.Int("longPollInterval");err == nil && longPollInterval > 0 {
 					config.LongPollInterval = time.Second * time.Duration(longPollInterval)
 				}
 				//全量拉取时间间隔
-				if fullPullInterval := c.Int("fullPullFromCacheInterval"); fullPullInterval > 0 {
+				if fullPullInterval,err := ini.Int("fullPullFromCacheInterval");err == nil && fullPullInterval > 0 {
 					config.FullPullFromCacheInterval = time.Second * time.Duration(fullPullInterval)
 				}
 
@@ -172,13 +176,32 @@ func runStart(c *cli.Context) error {
 		}
 
 		config := goapollo.NewApolloConfig(url, appId)
-		config.LocalFilePath = saveFile
+
 		if cluster := c.String("cluster"); cluster != "" {
 			config.ClusterName = cluster
 		}
 		if namespace := c.String("namespace"); namespace != "" {
 			config.NamespaceName = namespace
 		}
+		//解析保存文件路径.
+		if sf,err := filepath.Abs(saveFile); err == nil {
+			dir := filepath.Dir(sf)
+
+			if _, err := os.Stat(dir); err != nil && os.IsNotExist(err) {
+				os.MkdirAll(dir, 0755)
+			}
+			saveFile = sf
+		}
+		config.LocalFilePath = saveFile
+		//轮询拉取时间间隔.
+		if longPollInterval := c.Duration("long_interval"); longPollInterval > 0 {
+			config.LongPollInterval = longPollInterval
+		}
+		//全量拉取时间间隔
+		if fullPullInterval := c.Duration("full_interval"); fullPullInterval > 0 {
+			config.FullPullFromCacheInterval = fullPullInterval
+		}
+
 		configs = append(configs, config)
 
 	} else {
