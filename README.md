@@ -14,15 +14,15 @@ Golang 实现的Apollo 客户端。
 
 参数：
 
-`-file` 将配置保存的文件路径
-`-port` 启动服务监听的HTTP端口
-`-addr` 如果设置了监听地址，则使用设置的监听地址开放HTTP服务，否则监听所有地址
-`-app_id` 应用的APPID
-`-cluster` 集群名称
-`-namespace` 命名空间
-`-server_url` Apollo 服务器地址
-`-long_interval` 通知轮询时间间隔，单位是秒
-`-full_interval` 全量拉取轮询时间间隔，单位是秒
+- `-file` 将配置保存的文件路径
+- `-port` 启动服务监听的HTTP端口
+- `-addr` 如果设置了监听地址，则使用设置的监听地址开放HTTP服务，否则监听所有地址
+- `-app_id` 应用的APPID
+- `-cluster` 集群名称
+- `-namespace` 命名空间
+- `-server_url` Apollo 服务器地址
+- `-long_interval` 通知轮询时间间隔，单位是秒
+- `-full_interval` 全量拉取轮询时间间隔，单位是秒
 
 ## 环境变量启动
 
@@ -34,15 +34,15 @@ Golang 实现的Apollo 客户端。
 
 环境变量值：
 
-`APOLLO_SAVE_PATH` 将配置保存的文件路径
-`APOLLO_HTTP_PORT` 启动服务监听的HTTP端口
-`APOLLO_HTTP_ADDR` 如果设置了监听地址，则使用设置的监听地址开放HTTP服务，否则监听所有地址
-`APOLLO_APP_ID` 应用的APPID
-`APOLLO_CLUSTER` 集群名称
-`APOLLO_NAMESPACE_NAME` 命名空间
-`APOLLO_SERVER_URL` Apollo 服务器地址
-`APOLLO_LONG_INTERVAL` 通知轮询时间间隔，单位是秒
-`APOLLO_FULL_INTERVAL`  全量拉取轮询时间间隔，单位是秒
+- `APOLLO_SAVE_PATH` 将配置保存的文件路径
+- `APOLLO_HTTP_PORT` 启动服务监听的HTTP端口
+- `APOLLO_HTTP_ADDR` 如果设置了监听地址，则使用设置的监听地址开放HTTP服务，否则监听所有地址
+- `APOLLO_APP_ID` 应用的APPID
+- `APOLLO_CLUSTER` 集群名称
+- `APOLLO_NAMESPACE_NAME` 命名空间
+- `APOLLO_SERVER_URL` Apollo 服务器地址
+- `APOLLO_LONG_INTERVAL` 通知轮询时间间隔，单位是秒
+- `APOLLO_FULL_INTERVAL`  全量拉取轮询时间间隔，单位是秒
 
 ## 配置文件
 
