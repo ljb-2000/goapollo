@@ -76,15 +76,15 @@ var Start = &cli.Command{
 			Usage:   "Apollo server url.",
 			EnvVars: []string{"APOLLO_SERVER_URL"},
 		},
-		&cli.DurationFlag{
+		&cli.IntFlag{
 			Name:    "long_interval",
-			Value:   time.Second * 60,
+			Value:    60,
 			Usage:   "Timed full pull time interval. ",
 			EnvVars: []string{"APOLLO_LONG_INTERVAL"},
 		},
-		&cli.DurationFlag{
+		&cli.IntFlag{
 			Name: "full_interval",
-			Value: time.Second * 60,
+			Value: 60,
 			Usage:"",
 			EnvVars:[]string{"APOLLO_FULL_INTERVAL"},
 		},

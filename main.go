@@ -11,7 +11,6 @@ import (
 const APP_VERSION = "0.1"
 
 //go run main.go run -app_id=6e77bd897fe903ac -ns=TEST1.nginx -server_url=http://dev.config.xin.com/
-
 func main()  {
 	logrus.SetFormatter(&logrus.TextFormatter{
 		TimestampFormat: "2006-01-02 15:04:05",
@@ -20,7 +19,6 @@ func main()  {
 		FullTimestamp:    true,
 	})
 	logrus.AddHook(&log.ContextHook{ LogPath: "./runtime/logs/"})
-	//logrus.SetLevel(logrus.Level(5))
 
 	app := &cli.App{}
 	app.Name = "Apollo client"
