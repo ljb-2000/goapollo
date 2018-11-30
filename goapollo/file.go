@@ -3,19 +3,24 @@ package goapollo
 import (
 	log "github.com/sirupsen/logrus"
 	"os"
+	"path/filepath"
 )
 
 type FileHandler struct {
 	savePath string
 }
 
-
 func NewFileHandler(savePath string) (*FileHandler, error) {
 
+	base := filepath.Dir(savePath)
+	if _, err := os.Stat(base); err != nil && os.IsNotExist(err) {
+		if err = os.MkdirAll(base, 0755); err != nil {
+			log.Errorf("创建目录失败 -> %s %s", base, err)
+		}
+	}
 	h := &FileHandler{
 		savePath: savePath,
 	}
-
 
 	return h, nil
 }
@@ -42,7 +47,7 @@ func (h *FileHandler) save(body string) error {
 		return err
 	}
 	defer f.Close()
-	_,err = f.WriteString(body)
+	_, err = f.WriteString(body)
 
 	return err
 }

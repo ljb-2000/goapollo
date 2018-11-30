@@ -3,34 +3,20 @@ package goapollo
 import (
 	"sync"
 	"fmt"
-)
-const (
-	defaultNotificationId = -1
+	"encoding/json"
 )
 
-
-type apolloNotify struct {
-	NotificationId int64  `json:"notificationId"`
-	NamespaceName  string `json:"namespaceName"`
-}
 
 // Apollo 通知信息
 type ApolloConfigNotification struct {
-	NamespaceName  string
-	NotificationId int64
+	NamespaceName  string `json:"namespaceName"`
+	NotificationId int64 `json:"notificationId"`
 }
 
 func NewApolloConfigNotification() *ApolloConfigNotification {
 	return &ApolloConfigNotification{NotificationId: defaultNotificationId}
 }
 
-// 添加通知.
-//func (notify *ApolloConfigNotification) AddMessage(key string, notificationId int64) {
-//	if notify.Messages == nil {
-//		notify.Messages = NewApolloNotificationMessages()
-//	}
-//	notify.Messages.Put(key, notificationId)
-//}
 
 func (notify *ApolloConfigNotification) String() string {
 	return fmt.Sprintf("ApolloConfigNotification{ namespaceName='%s', notificationId=%d }", notify.NamespaceName, notify.NotificationId);
@@ -71,6 +57,23 @@ func (message *ApolloNotificationMessages) Has(key string) bool {
 	return false
 }
 
+func (message *ApolloNotificationMessages) Delete(key string) int64 {
+	message.init()
+	if v, ok := message.details[key]; ok {
+		message.mux.Lock()
+		defer message.mux.Unlock()
+		delete(message.details,key)
+		return v
+	}
+	return 0
+}
+
+func (message *ApolloNotificationMessages) Clear(key string) {
+	message.mux.Lock()
+	defer message.mux.Unlock()
+	message.details = make(map[string]int64)
+}
+
 func (message *ApolloNotificationMessages) MergeFrom(source *ApolloNotificationMessages) {
 	message.init()
 	source.mux.RLock()
@@ -90,4 +93,38 @@ func (message *ApolloNotificationMessages) init() {
 	if message.mux == nil {
 		message.mux = &sync.RWMutex{}
 	}
+}
+
+func (message *ApolloNotificationMessages)  Clone() *ApolloNotificationMessages {
+	mm := NewApolloNotificationMessages()
+	for k,v := range message.details  {
+		mm.Put(k,v)
+	}
+	return mm
+}
+
+func (message *ApolloNotificationMessages) Foreach(fn func(namespace string,id int64)) {
+	message.mux.RLock()
+	defer message.mux.RUnlock()
+	for k,v := range message.details {
+		fn(k,v)
+	}
+}
+
+func (message *ApolloNotificationMessages) String() string {
+	message.mux.RLock()
+	defer message.mux.RUnlock()
+	details := make([]*ApolloConfigNotification,0)
+	for k,v := range message.details {
+		notify := &ApolloConfigNotification{
+			NamespaceName:k,
+			NotificationId:v,
+		}
+		details = append(details,notify)
+	}
+
+	if b,err := json.Marshal(details); err == nil {
+		return string(b)
+	}
+	return ""
 }

@@ -3,7 +3,6 @@ package goapollo
 import (
 	"errors"
 	"sync"
-	"strings"
 )
 
 var (
@@ -30,30 +29,20 @@ func AddCustomHandler(name string, handler FuncHandler) error {
 	return nil
 }
 
-func ExecuteHandler(changeEvent *ConfigEntity, savePath string) (error) {
+func ExecuteHandler(changeEvent *ConfigEntity, file *ApolloLocalFile) (error) {
 	mux.RLock()
 	defer mux.RUnlock()
 	var handler Handler
 	var err error
 
-	//如果是 Nginx 后缀的则当做Nginx配置文件
-	if strings.HasSuffix(changeEvent.NamespaceName, ".nginx") {
-		if nginx, ok := handlerCache["nginx"]; ok {
-			handler,err = nginx(savePath)
-			if err != nil {
-				return err
-			}
+	if fn, ok := handlerCache[string(file.FileType)]; ok {
+		handler,err = fn(file.FilePath)
+		if err != nil {
+			return err
 		}
-	} else if strings.HasSuffix(changeEvent.NamespaceName, ".ini") || changeEvent.ConfigType == C_TYPE_POROPERTIES {
-		if ini,ok := handlerCache["ini"]; ok {
-			handler,err = ini(savePath)
-			if err != nil {
-				return err
-			}
-		}
-	} else {
-		if f,ok := handlerCache["default"]; ok {
-			handler,err = f(savePath)
+	}  else {
+		if fn,ok := handlerCache["default"]; ok {
+			handler,err = fn(file.FilePath)
 			if err != nil {
 				return err
 			}
@@ -68,6 +57,10 @@ func ExecuteHandler(changeEvent *ConfigEntity, savePath string) (error) {
 
 func init() {
 	handlerCache["nginx"] = func(p string) (Handler, error) {
+
+		return NewNginxHandler(p)
+	}
+	handlerCache["fastcgi"] = func(p string) (Handler, error) {
 
 		return NewNginxHandler(p)
 	}

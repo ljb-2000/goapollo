@@ -4,6 +4,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/lifei6671/goini"
 	"strings"
+	"path/filepath"
+	"os"
 )
 
 type IniHandler struct {
@@ -12,6 +14,13 @@ type IniHandler struct {
 }
 
 func NewIniHandler(savePath string) (*IniHandler, error) {
+
+	base := filepath.Dir(savePath)
+	if _,err := os.Stat(base); err != nil && os.IsNotExist(err) {
+		if err = os.MkdirAll(base,0755); err != nil {
+			log.Errorf("创建目录失败 -> %s %s",base, err)
+		}
+	}
 
 	h := &IniHandler{
 		savePath: savePath,

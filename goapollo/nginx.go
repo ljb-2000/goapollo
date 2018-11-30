@@ -6,6 +6,7 @@ import (
 	"strings"
 	"fmt"
 	"sync"
+	"path/filepath"
 )
 
 type NginxHandler struct {
@@ -15,6 +16,13 @@ type NginxHandler struct {
 }
 
 func NewNginxHandler(savePath string) (*NginxHandler, error) {
+
+	base := filepath.Dir(savePath)
+	if _,err := os.Stat(base); err != nil && os.IsNotExist(err) {
+		if err = os.MkdirAll(base,0755); err != nil {
+			log.Errorf("创建目录失败 -> %s %s",base, err)
+		}
+	}
 
 	h:= &NginxHandler{
 		savePath: savePath,

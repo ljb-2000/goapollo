@@ -10,7 +10,7 @@ import (
 
 const APP_VERSION = "0.1"
 
-//go run main.go run -app_id=6e77bd897fe903ac -ns=TEST1.nginx -server_url=http://dev.config.xin.com/
+//go run main.go run -app_id=6e77bd897fe903ac -ns=TEST1.nginx -server_url=http://dev.config.apollo.com/
 func main()  {
 	logrus.SetFormatter(&logrus.TextFormatter{
 		TimestampFormat: "2006-01-02 15:04:05",

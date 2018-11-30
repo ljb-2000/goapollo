@@ -1,58 +1,47 @@
 package goapollo
 
-import "fmt"
-
-const (
-	C_UNCHANGED PropertyChangeType = iota
-	C_ADDED
-	C_MODIFIED
-	C_DELETED
+import (
+	"fmt"
+	"encoding/json"
 )
-
-const (
-	C_TYPE_POROPERTIES ConfigType = iota
-	C_TYPE_XML
-	C_TYPE_YAML
-	C_TYPE_YML
-	C_TYPE_JSON
-)
-
-//配置类型.
-type ConfigType int
-
-//配置变更类型
-type PropertyChangeType int
 
 type KeyValuePair map[string]string
 
 //配置实体.
 type ConfigEntity struct {
-	NamespaceName string
-	ConfigType    ConfigType
-	Values interface{}
+	NamespaceName string      `json:"namespaceName"`
+	ConfigType    ConfigType  `json:"configType"`
+	Values        interface{} `json:"values"`
 }
 
-func NewConfigEntity() *ConfigEntity  {
+func NewConfigEntity() *ConfigEntity {
 	return &ConfigEntity{}
 }
 func (c *ConfigEntity) GetValues() (map[string]string) {
 	if c.ConfigType != C_TYPE_POROPERTIES {
 		return nil
 	}
-	if kv,ok := c.Values.(map[string]string); ok {
+	if kv, ok := c.Values.(map[string]string); ok {
 		return kv
 	}
 	return nil
 }
 
-func (c *ConfigEntity) GetConfigFile() string  {
+func (c *ConfigEntity) GetConfigFile() string {
 	if c.ConfigType == C_TYPE_POROPERTIES {
 		return ""
 	}
-	if kv,ok := c.Values.(string); ok {
+	if kv, ok := c.Values.(string); ok {
 		return kv
 	}
 	return ""
+}
+
+func (c *ConfigEntity) String() string {
+	if b, err := json.Marshal(c); err == nil {
+		return string(b)
+	}
+	return fmt.Sprintf("%v", *c)
 }
 
 // 配置变化的实体.
@@ -77,12 +66,12 @@ func (e *ConfigChangeEntry) String() string {
 type ConfigChangeEventArgs struct {
 	NamespaceName string
 	ConfigType    ConfigType
-	Values map[string]*ConfigChangeEntry
-	FileContent string
+	Values        map[string]*ConfigChangeEntry
+	FileContent   string
 }
 
 func NewConfigChangeEventArgs(namespace string, configType ConfigType) *ConfigChangeEventArgs {
-	return &ConfigChangeEventArgs{  NamespaceName:namespace, ConfigType:configType,Values: make(map[string]*ConfigChangeEntry) ,FileContent:""}
+	return &ConfigChangeEventArgs{NamespaceName: namespace, ConfigType: configType, Values: make(map[string]*ConfigChangeEntry), FileContent: ""}
 }
 
 func (c *ConfigChangeEventArgs) String() string {

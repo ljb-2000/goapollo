@@ -6,9 +6,9 @@ import (
 	"github.com/lifei6671/goapollo/goapollo"
 	"os"
 	log "github.com/sirupsen/logrus"
+	logxin "github.com/lifei6671/goapollo/log"
 	"github.com/lifei6671/goini"
 	"strings"
-	"path/filepath"
 )
 
 var Start = &cli.Command{
@@ -45,11 +45,10 @@ var Start = &cli.Command{
 			EnvVars: []string{"APOLLO_HTTP_ADDR"},
 		},
 		&cli.StringFlag{
-			Name:    "logger",
-			Aliases: []string{"log"},
-			Value:   "conf/seelog.xml",
-			Usage:   "logrus configuration file path.",
-			EnvVars: []string{"APOLLO_LOGGER"},
+			Name:    "log_path",
+			Value:   "./runtime/logs/",
+			Usage:   "Log output directory.",
+			EnvVars: []string{"APOLLO_LOG_PATH"},
 		},
 		&cli.StringFlag{
 			Name:    "app_id",
@@ -78,28 +77,24 @@ var Start = &cli.Command{
 		},
 		&cli.IntFlag{
 			Name:    "long_interval",
-			Value:    60,
-			Usage:   "Timed full pull time interval. ",
+			Value:   1,
+			Usage:   "Timed notification time interval. ",
 			EnvVars: []string{"APOLLO_LONG_INTERVAL"},
 		},
 		&cli.IntFlag{
-			Name: "full_interval",
-			Value: 60,
-			Usage:"",
-			EnvVars:[]string{"APOLLO_FULL_INTERVAL"},
+			Name:    "full_interval",
+			Usage:   "Timed full pull time interval.",
+			EnvVars: []string{"APOLLO_FULL_INTERVAL"},
+		},
+		&cli.StringFlag{
+			Name:    "related",
+			Usage:   "Associated namespace.",
+			EnvVars: []string{"APOLLO_RELATED"},
 		},
 	},
 }
 
-/**
-{
-  "appId": "6e77bd897fe903ac",
-  "cluster": "default",
-  "namespaceName": "TEST1.ini",
-  "ip": "http://dev.config.xin.com/",
-  "configFilePath": "fastcgi_param.conf"
-}
- */
+
 func runStart(c *cli.Context) error {
 
 	saveFile := c.String("file")
@@ -109,6 +104,7 @@ func runStart(c *cli.Context) error {
 	configs := make([]*goapollo.ApolloConfig, 0)
 	port := c.Int("port")
 	addr := c.String("addr")
+	logPath := ""
 
 	//如果配置文件存在则初始化配置文件,如果没有指定配置文件或配置文件不存在则从其他参数中获取
 	if _, err := os.Stat(configFile); err == nil {
@@ -118,108 +114,106 @@ func runStart(c *cli.Context) error {
 		}
 		port = ini.DefaultInt("port", port)
 		addr = ini.DefaultString("addr", "")
+		logPath = ini.DefaultString("log_path", "")
 
 		ini.ForEach(func(section string) bool {
-			log.Info(section)
 			if section != goini.DefaultSection && strings.HasPrefix(section, "app:") {
 				appId := ini.GetString(section + "::appId")
 				if appId == "" {
 					log.Fatalf("Apollo aplication id not does empty -> [Section] %s", section)
 					return true
 				}
-				url := ini.GetString(section + "::serverUrl")
-				if url == "" {
+				serverUrl := ini.GetString(section + "::serverUrl")
+				if serverUrl == "" {
 					log.Fatalf("Apollo server url not does empty -> [Section] %s", section)
 					return true
 				}
-				if !strings.HasSuffix(url, "/") {
-					url += "/"
-				}
+
 				cluster := ini.DefaultString(section+"::cluster", "default")
 				namespace := ini.DefaultString(section+"::namespace", "application")
 				saveFile := ini.DefaultString(section+"::saveFile", "")
 
-				if sf,err := filepath.Abs(saveFile); err == nil {
-					dir := filepath.Dir(sf)
+				config := goapollo.NewApolloConfig(appId, cluster, namespace, serverUrl)
+				config.LocalFiles = goapollo.ApolloLocalFileFromString(saveFile)
 
-					if _, err := os.Stat(dir); err != nil && os.IsNotExist(err) {
-						os.MkdirAll(dir, 0755)
-					}
-					saveFile = sf
-				}
-				config := goapollo.NewApolloConfig(url, appId)
-				config.LocalFilePath = saveFile
-				config.NamespaceName = namespace
-				config.ClusterName = cluster
-				config.AppId = appId
-				config.ConfigServerUrl = url
 				//轮询拉取时间间隔.
-				if longPollInterval,err := ini.Int("longPollInterval");err == nil && longPollInterval > 0 {
+				if longPollInterval, err := ini.Int(section + "::longPollInterval"); err == nil && longPollInterval > 0 {
 					config.LongPollInterval = time.Second * time.Duration(longPollInterval)
 				}
+
 				//全量拉取时间间隔
-				if fullPullInterval,err := ini.Int("fullPullFromCacheInterval");err == nil && fullPullInterval > 0 {
+				if fullPullInterval, err := ini.Int(section + "::fullPullFromCacheInterval"); err == nil && fullPullInterval > 0 {
 					config.FullPullFromCacheInterval = time.Second * time.Duration(fullPullInterval)
 				}
 
-				log.Infof("Add configuration application -> %s", config.String())
+				if related := ini.DefaultString(section+"::related", ""); related != "" {
+
+					if relates := strings.Split(related, ";"); len(relates) > 0 {
+						config.AppendNamespace(relates...)
+					}
+				}
+
+				log.Infof("Add configuration application -> %v", config)
 				configs = append(configs, config)
 			}
 			return true
 		})
 	} else if appId := c.String("app_id"); appId != "" {
 		//从命令行中获取参数
-		url := c.String("server_url")
-		if url == "" {
+		serverUrl := c.String("server_url")
+		if serverUrl == "" {
 			log.Error("Apollo server url not does empty.")
 			os.Exit(1)
 		}
-
-		config := goapollo.NewApolloConfig(url, appId)
-
-		if cluster := c.String("cluster"); cluster != "" {
-			config.ClusterName = cluster
+		cluster := c.String("cluster");
+		if cluster == "" {
+			cluster = "default"
 		}
-		if namespace := c.String("namespace"); namespace != "" {
-			config.NamespaceName = namespace
+		namespace := c.String("namespace");
+		if namespace == "" {
+			namespace = "application"
 		}
-		//解析保存文件路径.
-		if sf,err := filepath.Abs(saveFile); err == nil {
-			dir := filepath.Dir(sf)
 
-			if _, err := os.Stat(dir); err != nil && os.IsNotExist(err) {
-				os.MkdirAll(dir, 0755)
-			}
-			saveFile = sf
-		}
-		config.LocalFilePath = saveFile
+		config := goapollo.NewApolloConfig(appId, cluster, namespace, serverUrl)
+
+		config.LocalFiles = goapollo.ApolloLocalFileFromString(saveFile)
 		//轮询拉取时间间隔.
-		if longPollInterval := c.Duration("long_interval"); longPollInterval > 0 {
-			config.LongPollInterval = longPollInterval
+		if longPollInterval := c.Int("long_interval"); longPollInterval > 0 {
+			config.LongPollInterval = time.Duration(longPollInterval) * time.Second
 		}
 		//全量拉取时间间隔
 		if fullPullInterval := c.Duration("full_interval"); fullPullInterval > 0 {
-			config.FullPullFromCacheInterval = fullPullInterval
+			config.FullPullFromCacheInterval = time.Duration(fullPullInterval) * time.Second
 		}
 
+		if related := c.String("related"); related != "" {
+			if relates := strings.Split(related, ";"); len(relates) > 0 {
+				config.AppendNamespace(relates...)
+			}
+		}
 		configs = append(configs, config)
 
+		logPath = c.String("log_path")
 	} else {
 		log.Fatal("Not found configuration file.")
 	}
 
+	if logPath != "" {
+		os.MkdirAll(logPath, 0755)
+		log.AddHook(&logxin.ContextHook{LogPath: logPath})
+	}
 	log.Info("开始监听配置变更.")
 
-	config := func(client *goapollo.ApolloClient) {
+	config := func(client *goapollo.Client) {
 		client.Port = port
 		client.Addr = addr
 	}
 
-	apolloConfig := func(client *goapollo.ApolloClient) {
+	apolloConfig := func(client *goapollo.Client) {
 		client.AddApolloConfig(configs...)
 	}
 
-	client := goapollo.NewApolloClient(config, apolloConfig)
+	client := goapollo.NewClient(config, apolloConfig)
 	client.Run()
 
 	return nil
