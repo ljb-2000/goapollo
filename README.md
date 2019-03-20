@@ -1,6 +1,6 @@
 # goapollo
 
-Golang 实现的Apollo 客户端。
+Golang 实现的Apollo 客户端
 
 支持从命令行、配置文件、环境变量启动，将服务器端变动的配置定时拉取并保存到本地文件中。
 
